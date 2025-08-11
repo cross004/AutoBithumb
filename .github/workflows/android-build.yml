@@ -1,75 +1,61 @@
 name: Android Build (Vite + Capacitor)
 
 on:
-  push:
-    branches: [ main ]
   workflow_dispatch:
 
 jobs:
   build-android:
     runs-on: ubuntu-latest
-    env:
-      NODE_VERSION: '18'
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v3
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version: '18'
 
       - name: Install dependencies
-        working-directory: frontend-vite
         run: |
-          npm ci
+          cd frontend-vite
+          npm install
 
       - name: Build frontend (Vite)
-        working-directory: frontend-vite
         run: |
+          cd frontend-vite
           npm run build
 
       - name: Setup Java (for Gradle)
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v3
         with:
           distribution: 'temurin'
           java-version: '17'
 
       - name: Install Capacitor CLI
-        run: |
-          npm install -g @capacitor/cli
+        run: npm install -g @capacitor/cli
 
       - name: Initialize Capacitor (if needed)
         run: |
-          npx cap init auto-trader com.example.autotrader --web-dir=frontend-vite/dist || echo "Capacitor already initialized"
+          cd frontend-vite
+          npx cap init android com.example.app "AutoBithumbApp" || true
 
       - name: Add Android platform (idempotent)
         run: |
-          npx cap add android || echo "Android platform may already exist"
+          cd frontend-vite
+          npx cap add android || true
 
-      - name: Copy web assets to Android project
+      - name: Copy built web to Android project
         run: |
-          npx cap copy
+          cd frontend-vite
+          npx cap copy android
 
-      - name: Build Android (Gradle assembleDebug)
-        working-directory: android
+      - name: Build Android APK
         run: |
-          ./gradlew assembleDebug --no-daemon
-        env:
-          JAVA_HOME: /usr/lib/jvm/java-17-amazon-corretto
-
-      - name: Locate APK
-        id: find_apk
-        run: |
-          echo "::group::Search APKs"
-          find android -type f -path "*/build/outputs/apk/**/*.apk" -print || true
-          echo "::endgroup::"
-          apk_path=$(find android -type f -path "*/build/outputs/apk/**/*.apk" -print | tail -n 1)
-          echo "apk_path=$apk_path" >> $GITHUB_OUTPUT
+          cd frontend-vite/android
+          ./gradlew assembleDebug
 
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: android-apk
-          path: |
-            ${{ steps.find_apk.outputs.apk_path }}
+          path: frontend-vite/android/app/build/outputs/apk/debug/app-debug.apk
